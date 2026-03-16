@@ -1,0 +1,34 @@
+# Xcode
+xcuserdata/
+*.xcworkspace/xcuserdata/
+DerivedData/
+*.xcuserstate
+*.xccheckout
+*.moved-aside
+build/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Packages/
+
+# macOS
+.DS_Store
+*.dSYM
+*.ipa
+*.app
+
+# Distribution
+*.dmg
+*.zip
+
+# IDE
+*.swp
+*~
+.idea/
+.vscode/
+
+# AI tooling (local workflow)
+.opencode/
+openspec/
+.Claude/
