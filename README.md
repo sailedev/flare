@@ -24,17 +24,12 @@ Requires macOS 14.0 (Sonoma) or later.
 ### Homebrew
 
 ```bash
-brew tap sailedev/flare
 brew install --cask flare
 ```
 
-> Homebrew tap coming soon.
-
 ### Download
 
-Grab the latest `.app` from [Releases](https://github.com/sailedev/flare/releases).
-
-> Flare is not yet notarized. On first launch you may need to right-click → Open, or run `xattr -cr Flare.app`.
+Grab the latest `.dmg` from [Releases](https://github.com/sailedev/flare/releases).
 
 ## Build from source
 
