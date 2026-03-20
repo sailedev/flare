@@ -41,9 +41,16 @@ jobs:
             -f pkcs12 \
             -k "$KEYCHAIN_PATH"
 
+          # Install Apple intermediate certificates (ignore if already present)
+          curl -sL "https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer" -o $RUNNER_TEMP/DeveloperIDG2CA.cer
+          security import $RUNNER_TEMP/DeveloperIDG2CA.cer -k "$KEYCHAIN_PATH" || true
+
           # Allow codesign to access the keychain
           security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
+
+          # Verify signing identity
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
 
       - name: Update version in project
         run: |
@@ -59,6 +66,9 @@ jobs:
             DEVELOPMENT_TEAM=${{ secrets.APPLE_TEAM_ID }} \
             CODE_SIGN_IDENTITY="Developer ID Application" \
             CODE_SIGN_STYLE=Manual \
+            ENABLE_HARDENED_RUNTIME=YES \
+            CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
+            OTHER_CODE_SIGN_FLAGS="--timestamp --options=runtime" \
             CURRENT_PROJECT_VERSION=${{ github.run_number }} \
             MARKETING_VERSION=$VERSION
 
@@ -83,11 +93,24 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
         run: |
-          xcrun notarytool submit "Flare-$VERSION.dmg" \
+          SUBMIT_OUTPUT=$(xcrun notarytool submit "Flare-$VERSION.dmg" \
             --apple-id "$APPLE_ID" \
             --team-id "$APPLE_TEAM_ID" \
             --password "$APPLE_APP_SPECIFIC_PASSWORD" \
-            --wait
+            --wait 2>&1) || true
+
+          echo "$SUBMIT_OUTPUT"
+
+          # Extract submission ID and fetch log if it failed
+          SUBMISSION_ID=$(echo "$SUBMIT_OUTPUT" | grep "id:" | head -1 | awk '{print $2}')
+          if echo "$SUBMIT_OUTPUT" | grep -q "Invalid"; then
+            echo "--- Notarization log ---"
+            xcrun notarytool log "$SUBMISSION_ID" \
+              --apple-id "$APPLE_ID" \
+              --team-id "$APPLE_TEAM_ID" \
+              --password "$APPLE_APP_SPECIFIC_PASSWORD"
+            exit 1
+          fi
 
           xcrun stapler staple "Flare-$VERSION.dmg"
 
