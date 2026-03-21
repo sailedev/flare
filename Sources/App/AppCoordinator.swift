@@ -243,9 +243,32 @@ final class AppCoordinator: ObservableObject {
                   thisGeneration == self.previewGeneration
             else { return }
             autoreleasepool {
+                let chromeHeight: CGFloat = 320
+                let previewPadding: CGFloat = 32
+                let screenMargin: CGFloat = 80
+                let minWidth: CGFloat = 480
+                let minHeight: CGFloat = 400
+                let screen = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
+                let maxWidth = screen.width * 0.7
+                let maxHeight = screen.height * 0.85
+
+                let imageSize = image.size
+                let availableWidth = maxWidth - previewPadding
+                let availableHeight = maxHeight - chromeHeight - previewPadding
+
+                var previewWidth = availableWidth
+                var previewHeight = availableWidth / (imageSize.width / imageSize.height)
+                if previewHeight > availableHeight {
+                    previewHeight = availableHeight
+                    previewWidth = availableHeight * (imageSize.width / imageSize.height)
+                }
+
+                let windowWidth = max(minWidth, min(maxWidth, previewWidth + previewPadding))
+                let windowHeight = max(minHeight, min(maxHeight, previewHeight + chromeHeight + previewPadding))
+
                 let previewView = PostCapturePreviewView(viewModel: viewModel)
                 let panel = KeyablePanel(
-                    contentRect: NSRect(x: 0, y: 0, width: 560, height: 520),
+                    contentRect: NSRect(x: 0, y: 0, width: windowWidth, height: windowHeight),
                     styleMask: [.titled, .closable, .resizable, .nonactivatingPanel],
                     backing: .buffered,
                     defer: false
