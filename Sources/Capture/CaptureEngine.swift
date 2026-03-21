@@ -180,7 +180,7 @@ final class CaptureEngine {
 
         case .region(let globalRect):
             logger.info("Selected region: \(Int(globalRect.width))x\(Int(globalRect.height)) at (\(Int(globalRect.origin.x)), \(Int(globalRect.origin.y)))")
-            // Region is in global CG coordinates — may span multiple displays
+            // Region is in global CG coordinates - may span multiple displays
             let stitched = try stitchRegion(globalRect, from: displayDataArray)
             return Self.ownedImage(
                 cgImage: stitched,

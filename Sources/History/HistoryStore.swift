@@ -115,7 +115,7 @@ final class HistoryStore: ObservableObject {
     func delete(item: HistoryItem) {
         guard let db else { return }
 
-        // Delete DB row first — an orphaned file is less harmful than
+        // Delete DB row first - an orphaned file is less harmful than
         // an orphaned DB entry pointing to a missing file
         let row = screenshots.filter(colId == item.id)
         _ = try? db.run(row.delete())

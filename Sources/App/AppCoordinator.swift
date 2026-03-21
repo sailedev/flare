@@ -165,7 +165,7 @@ final class AppCoordinator: ObservableObject {
         }
     }
 
-    /// Immediately beautify, output, and return to idle — no preview window.
+    /// Immediately beautify, output, and return to idle - no preview window.
     private func quickCapture(image: NSImage) {
         let settings = settingsStore.defaultBeautificationSettings()
         let beautified = BeautificationEngine.render(screenshot: image, settings: settings)
@@ -597,7 +597,7 @@ final class AppCoordinator: ObservableObject {
         if CGPreflightScreenCaptureAccess() {
             return true
         }
-        logger.warning("Screen Recording permission denied — requesting access")
+        logger.warning("Screen Recording permission denied - requesting access")
         // CGRequestScreenCaptureAccess registers the app in System Settings
         // and opens the Screen Recording pane on first call.
         CGRequestScreenCaptureAccess()

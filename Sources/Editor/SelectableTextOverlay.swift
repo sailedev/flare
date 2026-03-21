@@ -158,7 +158,7 @@ struct SelectableTextOverlay: View {
                 return
             }
         }
-        // Tapped empty space — clear selection
+        // Tapped empty space - clear selection
         selectedIndices.removeAll()
         rebuildSelectedText()
     }

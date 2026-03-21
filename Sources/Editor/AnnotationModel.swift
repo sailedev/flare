@@ -237,7 +237,7 @@ enum AnnotationItem {
     }
 
     private func drawBlur(in context: CGContext, rect: CGRect) {
-        // Deterministic mosaic pattern — matches preview and export
+        // Deterministic mosaic pattern - matches preview and export
         context.saveGState()
         context.setFillColor(NSColor.gray.cgColor)
         context.fill(rect)

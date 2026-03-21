@@ -125,7 +125,7 @@ struct AnnotationCanvasView: View {
     private func handleSelectDrag(_ value: DragGesture.Value, in size: CGSize) {
         let current = value.location
 
-        // First drag event — determine what we're dragging
+        // First drag event - determine what we're dragging
         if !isDraggingAnnotation {
             let start = value.startLocation
 
@@ -157,7 +157,7 @@ struct AnnotationCanvasView: View {
                 return
             }
 
-            // Nothing hit — deselect
+            // Nothing hit - deselect
             viewModel.selectedAnnotationIndex = nil
             return
         }
@@ -168,7 +168,7 @@ struct AnnotationCanvasView: View {
               viewModel.annotations.indices.contains(selIdx) else { return }
 
         if let handle = activeHandle {
-            // Handle drag — resize or move endpoint
+            // Handle drag - resize or move endpoint
             switch handle {
             case .arrowStart:
                 viewModel.moveArrowEndpoint(at: selIdx, isStart: true, to: current)
@@ -180,7 +180,7 @@ struct AnnotationCanvasView: View {
                 viewModel.resizeAnnotation(at: selIdx, to: newRect)
             }
         } else {
-            // Body drag — move
+            // Body drag - move
             let delta = CGSize(width: current.x - lastPoint.x, height: current.y - lastPoint.y)
             viewModel.moveAnnotation(at: selIdx, by: delta)
         }
