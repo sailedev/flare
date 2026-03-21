@@ -24,6 +24,7 @@ Requires macOS 14.0 (Sonoma) or later.
 ### Homebrew
 
 ```bash
+brew tap sailedev/flare
 brew install --cask flare
 ```
 
