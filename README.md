@@ -2,7 +2,7 @@
 
 A native macOS screenshot tool that lives in the menu bar. Capture, beautify, annotate, and share. Free and open-source alternative to [Xnapper](https://xnapper.com).
 
-<!-- TODO: Add screenshot/demo here -->
+https://github.com/user-attachments/assets/b8564489-2f6b-46d6-870a-8a3044e137fc
 
 ## Features
 
