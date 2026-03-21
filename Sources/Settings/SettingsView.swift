@@ -215,7 +215,7 @@ private struct OverlayPane: View {
 private struct AppearancePane: View {
     @ObservedObject var settingsStore: SettingsStore
 
-    /// Sample image for live preview — generated once.
+    /// Sample image for live preview - generated once.
     private let sampleImage: NSImage = Self.generateSampleImage()
 
     var body: some View {
@@ -632,7 +632,7 @@ struct HotkeyRecorderRow: View {
             if flags.contains(.control) { carbonMods |= 0x1000 }
 
             // Require at least one modifier (except Escape to cancel)
-            if keyCode == 53 { // Escape — cancel recording
+            if keyCode == 53 { // Escape - cancel recording
                 stopRecording()
                 return nil
             }

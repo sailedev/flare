@@ -48,7 +48,7 @@ final class OutputEngine {
         }
 
         let content = UNMutableNotificationContent()
-        content.title = "Flare — Captured"
+        content.title = "Flare - Captured"
         content.body = body
 
         let request = UNNotificationRequest(
@@ -84,7 +84,7 @@ final class OutputEngine {
 
     func saveToDefaultFolder(_ image: NSImage, format: SettingsStore.ImageFormat, quality: Double, appName: String? = nil, captureMode: String? = nil) {
         guard let folder = settingsStore.saveFolderURL else {
-            logger.warning("Save folder not configured — skipping save")
+            logger.warning("Save folder not configured - skipping save")
             return
         }
         let filename = generateFilename(format: format, appName: appName, captureMode: captureMode)

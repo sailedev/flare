@@ -282,7 +282,7 @@ final class UnifiedOverlayView: NSView {
                 height: abs(global.y - start.y)
             )
             guard rect.width > 5, rect.height > 5 else {
-                // Too small, treat as miss — reset state
+                // Too small, treat as miss - reset state
                 coordinator.isDragging = false
                 coordinator.dragStartGlobal = nil
                 coordinator.dragCurrentGlobal = nil
@@ -293,7 +293,7 @@ final class UnifiedOverlayView: NSView {
         } else if let window = coordinator.hoveredWindow {
             coordinator.finish(.window(window))
         } else {
-            // Clicked on empty area — just reset
+            // Clicked on empty area - just reset
         }
 
         coordinator.isDragging = false
@@ -446,7 +446,7 @@ final class UnifiedOverlayView: NSView {
         path.lineWidth = 1.5
         path.stroke()
 
-        // Dimensions label — only show on the display containing the bottom-right corner
+        // Dimensions label - only show on the display containing the bottom-right corner
         let bottomRight = CGPoint(x: globalRect.maxX, y: globalRect.maxY)
         if let display, display.displayFrame.contains(bottomRight) {
             let dims = "\(Int(globalRect.width)) x \(Int(globalRect.height))"

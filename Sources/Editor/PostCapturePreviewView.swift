@@ -43,7 +43,7 @@ struct PostCapturePreviewView: View {
                     NSPasteboard.general.setString(viewModel.selectedOCRText, forType: .string)
                     return .handled
                 }
-                // No text selected — copy image
+                // No text selected - copy image
                 viewModel.copyToClipboard()
                 return .handled
             }
