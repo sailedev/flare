@@ -12,6 +12,33 @@ enum AnnotationTool: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    static func fromKeyboardShortcut(_ characters: String) -> AnnotationTool? {
+        switch characters.lowercased() {
+        case "v": return .select
+        case "a": return .arrow
+        case "t": return .text
+        case "r": return .rectangle
+        case "o": return .circle
+        case "h": return .highlight
+        case "b": return .blur
+        case "n": return .callout
+        default: return nil
+        }
+    }
+
+    var keyboardShortcut: String {
+        switch self {
+        case .select: return "V"
+        case .arrow: return "A"
+        case .text: return "T"
+        case .rectangle: return "R"
+        case .circle: return "O"
+        case .highlight: return "H"
+        case .blur: return "B"
+        case .callout: return "N"
+        }
+    }
+
     var systemImage: String {
         switch self {
         case .select: return "cursorarrow"
@@ -57,10 +84,15 @@ enum AnnotationItem {
         case .highlight(let rect, _, _), .blur(let rect):
             return rect
         case .text(let pos, let content, let style):
-            let size = (content as NSString).size(
-                withAttributes: [.font: NSFont.systemFont(ofSize: style.fontSize, weight: .semibold)]
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: style.fontSize, weight: .semibold)
+            ]
+            let textRect = (content as NSString).boundingRect(
+                with: NSSize(width: 400, height: CGFloat.greatestFiniteMagnitude),
+                options: [.usesLineFragmentOrigin, .usesFontLeading],
+                attributes: attributes
             )
-            return CGRect(origin: pos, size: size)
+            return CGRect(origin: pos, size: textRect.size)
         case .callout(let pos, _, _):
             return CGRect(x: pos.x - 14, y: pos.y - 14, width: 28, height: 28)
         }
@@ -175,31 +207,48 @@ enum AnnotationItem {
 
     private func drawText(in context: CGContext, at position: CGPoint, content: String, style: AnnotationStyle) {
         let font = NSFont.systemFont(ofSize: style.fontSize, weight: .semibold)
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineBreakMode = .byWordWrapping
         let attributes: [NSAttributedString.Key: Any] = [
             .font: font,
             .foregroundColor: style.color,
+            .paragraphStyle: paragraphStyle,
         ]
         let nsString = content as NSString
 
-        // Flip context for text drawing
         context.saveGState()
 
-        let textSize = nsString.size(withAttributes: attributes)
+        // Calculate multiline bounding rect
+        let maxWidth: CGFloat = 400
+        let textRect = nsString.boundingRect(
+            with: NSSize(width: maxWidth, height: CGFloat.greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: attributes
+        )
 
         if style.filled {
             let bgRect = CGRect(
                 x: position.x - 4,
                 y: position.y - 2,
-                width: textSize.width + 8,
-                height: textSize.height + 4
+                width: textRect.width + 8,
+                height: textRect.height + 4
             )
             context.setFillColor(NSColor.black.withAlphaComponent(0.6).cgColor)
-            context.fill(bgRect)
+            let bgPath = CGPath(roundedRect: bgRect, cornerWidth: 4, cornerHeight: 4, transform: nil)
+            context.addPath(bgPath)
+            context.fillPath()
         }
+
+        let drawRect = CGRect(
+            x: position.x,
+            y: position.y,
+            width: textRect.width,
+            height: textRect.height
+        )
 
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: true)
-        nsString.draw(at: position, withAttributes: attributes)
+        nsString.draw(in: drawRect, withAttributes: attributes)
         NSGraphicsContext.restoreGraphicsState()
 
         context.restoreGState()
@@ -237,17 +286,17 @@ enum AnnotationItem {
     }
 
     private func drawBlur(in context: CGContext, rect: CGRect) {
-        // Deterministic mosaic pattern - matches preview and export
+        // Fallback mosaic pattern - used when pixelation is handled externally
+        // (e.g., in composeFinalImage which has access to the source image)
         context.saveGState()
         context.setFillColor(NSColor.gray.cgColor)
         context.fill(rect)
 
-        let blockSize: CGFloat = 8
+        let blockSize: CGFloat = 12
         var x = rect.origin.x
         while x < rect.maxX {
             var y = rect.origin.y
             while y < rect.maxY {
-                // Seed relative to rect origin so pattern matches preview regardless of coordinate transform
                 let seed = Int((x - rect.origin.x) / blockSize) &* 31 &+ Int((y - rect.origin.y) / blockSize) &* 17
                 let brightness = 0.3 + CGFloat(abs(seed) % 40) / 100.0
                 context.setFillColor(NSColor(white: brightness, alpha: 1).cgColor)

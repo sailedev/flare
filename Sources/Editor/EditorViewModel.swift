@@ -19,6 +19,9 @@ final class EditorViewModel: ObservableObject {
     var nextCalloutNumber: Int = 1
     @Published var selectedAnnotationIndex: Int?
 
+    /// True while the user is typing into a text annotation input field.
+    @Published var isEditingText: Bool = false
+
     /// The SwiftUI canvas (ZStack) size, reported by AnnotationCanvasView.
     /// Used to map annotation coordinates to image pixels for export.
     var canvasSize: CGSize = .zero
@@ -238,11 +241,143 @@ final class EditorViewModel: ObservableObject {
         }
 
         for annotation in annotations {
-            annotation.draw(in: context, canvasSize: CGSize(width: pixelW, height: pixelH))
+            if case .blur(let viewRect) = annotation {
+                // Handle blur annotations with actual pixelation using the pixel-space transform
+                drawPixelatedBlur(
+                    in: context, viewRect: viewRect,
+                    sourceImage: cgBeautified, pixelW: pixelW, pixelH: pixelH
+                )
+            } else {
+                annotation.draw(in: context, canvasSize: CGSize(width: pixelW, height: pixelH))
+            }
         }
 
         guard let finalImage = context.makeImage() else { return beautified }
         return NSImage(cgImage: finalImage, size: beautified.size)
+    }
+
+    // MARK: - Pixelated Blur for Export
+
+    /// Draws a pixelated blur region into the export CGContext.
+    /// `viewRect` is in SwiftUI canvas coordinates; the context's CTM maps it to pixels.
+    private func drawPixelatedBlur(
+        in context: CGContext, viewRect: CGRect,
+        sourceImage: CGImage, pixelW: CGFloat, pixelH: CGFloat
+    ) {
+        // Use the context's current CTM to map viewRect to pixel space
+        let ctm = context.ctm
+        let pixelRect = viewRect.applying(ctm).integral
+
+        // Clamp to image bounds (in pixel space, Y=0 at bottom for CGImage)
+        let imageBounds = CGRect(x: 0, y: 0, width: pixelW, height: pixelH)
+        let clampedPixelRect = pixelRect.intersection(imageBounds)
+        guard !clampedPixelRect.isNull, clampedPixelRect.width > 0, clampedPixelRect.height > 0 else { return }
+
+        guard let cropped = sourceImage.cropping(to: clampedPixelRect) else { return }
+
+        let blockSize: CGFloat = 12
+        let maxDim = max(clampedPixelRect.width, clampedPixelRect.height)
+        let scaleDown = blockSize / maxDim
+        let smallW = max(1, Int(CGFloat(cropped.width) * scaleDown))
+        let smallH = max(1, Int(CGFloat(cropped.height) * scaleDown))
+
+        guard let smallCtx = CGContext(
+            data: nil, width: smallW, height: smallH,
+            bitsPerComponent: 8, bytesPerRow: 0,
+            space: sourceImage.colorSpace ?? CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return }
+
+        smallCtx.interpolationQuality = .none
+        smallCtx.draw(cropped, in: CGRect(x: 0, y: 0, width: smallW, height: smallH))
+
+        guard let pixelated = smallCtx.makeImage() else { return }
+
+        // Draw the pixelated image back. We need to draw in the view coordinate system
+        // since the context CTM is set up for that.
+        context.saveGState()
+        context.interpolationQuality = .none
+        // context.draw draws in the current coordinate system (view coords)
+        // but CGContext.draw expects unflipped coordinates. Since the context is flipped,
+        // we need to use the viewRect directly.
+        context.draw(pixelated, in: viewRect)
+        context.restoreGState()
+    }
+
+    // MARK: - Pixelation for Blur Preview
+
+    /// Creates a pixelated version of the region under `canvasRect` from the beautified preview.
+    /// Returns an NSImage that can be drawn at the canvas rect position.
+    func pixelatedRegion(for canvasRect: CGRect) -> NSImage? {
+        guard let cgBeautified = cachedPreview.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        let pixelW = CGFloat(cgBeautified.width)
+        let pixelH = CGFloat(cgBeautified.height)
+        guard canvasSize.width > 0, canvasSize.height > 0 else { return nil }
+
+        let padding = EditorView.imagePadding
+        let availW = canvasSize.width - padding * 2
+        let availH = canvasSize.height - padding * 2
+        guard availW > 0, availH > 0 else { return nil }
+
+        let imageAspect = pixelW / pixelH
+        let areaAspect = availW / availH
+        let displayedW: CGFloat
+        let displayedH: CGFloat
+        if imageAspect > areaAspect {
+            displayedW = availW
+            displayedH = availW / imageAspect
+        } else {
+            displayedH = availH
+            displayedW = availH * imageAspect
+        }
+
+        let letterboxX = (availW - displayedW) / 2
+        let letterboxY = (availH - displayedH) / 2
+        let imageOriginX = padding + letterboxX
+        let imageOriginY = padding + letterboxY
+        let scale = pixelW / displayedW
+
+        // Map canvas rect to image pixel rect
+        let pixelRect = CGRect(
+            x: (canvasRect.origin.x - imageOriginX) * scale,
+            y: (canvasRect.origin.y - imageOriginY) * scale,
+            width: canvasRect.width * scale,
+            height: canvasRect.height * scale
+        ).integral
+
+        // Clamp to image bounds
+        let clampedRect = pixelRect.intersection(CGRect(x: 0, y: 0, width: pixelW, height: pixelH))
+        guard !clampedRect.isNull, clampedRect.width > 0, clampedRect.height > 0 else { return nil }
+
+        // CGImage crop rect: Y is from bottom
+        let cropRect = CGRect(
+            x: clampedRect.origin.x,
+            y: pixelH - clampedRect.origin.y - clampedRect.height,
+            width: clampedRect.width,
+            height: clampedRect.height
+        ).integral
+
+        guard cropRect.width > 0, cropRect.height > 0,
+              let cropped = cgBeautified.cropping(to: cropRect) else { return nil }
+
+        let blockSize: CGFloat = 12
+        let maxDim = max(clampedRect.width, clampedRect.height)
+        let scaleDown = blockSize / maxDim
+        let smallW = max(1, Int(CGFloat(cropped.width) * scaleDown))
+        let smallH = max(1, Int(CGFloat(cropped.height) * scaleDown))
+
+        guard let smallCtx = CGContext(
+            data: nil, width: smallW, height: smallH,
+            bitsPerComponent: 8, bytesPerRow: 0,
+            space: cgBeautified.colorSpace ?? CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+
+        smallCtx.interpolationQuality = .none
+        smallCtx.draw(cropped, in: CGRect(x: 0, y: 0, width: smallW, height: smallH))
+
+        guard let pixelated = smallCtx.makeImage() else { return nil }
+        return NSImage(cgImage: pixelated, size: NSSize(width: canvasRect.width, height: canvasRect.height))
     }
 
     // MARK: - OCR

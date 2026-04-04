@@ -54,6 +54,16 @@ struct EditorView: View {
                     return .handled
                 }
             }
+
+            // Tool keyboard shortcuts (only when not editing text)
+            if !viewModel.isEditingText && keyPress.modifiers.isEmpty {
+                if let tool = AnnotationTool.fromKeyboardShortcut(keyPress.characters) {
+                    viewModel.activeTool = tool
+                    if tool != .select { viewModel.selectedAnnotationIndex = nil }
+                    return .handled
+                }
+            }
+
             return .ignored
         }
         .alert("Discard Changes?", isPresented: $showDiscardConfirmation) {
@@ -82,10 +92,17 @@ struct EditorView: View {
                         .cornerRadius(6)
                 }
                 .buttonStyle(.plain)
-                .help(tool.rawValue)
+                .help("\(tool.rawValue) (\(tool.keyboardShortcut))")
             }
 
             Spacer()
+
+            // Contextual tool options
+            toolOptionsBar
+
+            Divider()
+                .frame(height: 20)
+                .padding(.horizontal, 4)
 
             ColorPicker("", selection: colorBinding)
                 .labelsHidden()
@@ -108,6 +125,97 @@ struct EditorView: View {
             .buttonStyle(.plain)
             .disabled(viewModel.redoStack.isEmpty)
             .keyboardShortcut("z", modifiers: [.command, .shift])
+        }
+    }
+
+    // MARK: - Contextual Tool Options
+
+    private var hasStrokeWidth: Bool {
+        [.arrow, .rectangle, .circle].contains(viewModel.activeTool)
+    }
+
+    private var hasFillToggle: Bool {
+        [.rectangle, .circle].contains(viewModel.activeTool)
+    }
+
+    private var hasFontSize: Bool {
+        viewModel.activeTool == .text
+    }
+
+    @ViewBuilder
+    private var toolOptionsBar: some View {
+        if hasStrokeWidth {
+            strokeWidthPicker
+        }
+        if hasFillToggle {
+            fillToggle
+        }
+        if hasFontSize {
+            fontSizePicker
+        }
+    }
+
+    private var strokeWidthPicker: some View {
+        HStack(spacing: 4) {
+            ForEach([
+                (label: "S", width: CGFloat(2)),
+                (label: "M", width: CGFloat(4)),
+                (label: "L", width: CGFloat(6)),
+            ], id: \.width) { preset in
+                Button {
+                    viewModel.annotationStyle.lineWidth = preset.width
+                } label: {
+                    // Visual line thickness indicator
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(viewModel.annotationStyle.lineWidth == preset.width
+                              ? Color.accentColor : Color.secondary)
+                        .frame(width: 18, height: preset.width + 1)
+                        .frame(width: 28, height: 28)
+                        .background(viewModel.annotationStyle.lineWidth == preset.width
+                                    ? Color.accentColor.opacity(0.15) : Color.clear)
+                        .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+                .help("\(preset.label) stroke (\(Int(preset.width))pt)")
+            }
+        }
+    }
+
+    private var fillToggle: some View {
+        Button {
+            viewModel.annotationStyle.filled.toggle()
+        } label: {
+            Image(systemName: viewModel.annotationStyle.filled ? "rectangle.fill" : "rectangle")
+                .frame(width: 32, height: 28)
+                .contentShape(Rectangle())
+                .background(viewModel.annotationStyle.filled ? Color.accentColor.opacity(0.2) : Color.clear)
+                .cornerRadius(6)
+        }
+        .buttonStyle(.plain)
+        .help(viewModel.annotationStyle.filled ? "Filled (click for outline)" : "Outline (click for filled)")
+    }
+
+    private var fontSizePicker: some View {
+        HStack(spacing: 2) {
+            ForEach([
+                (label: "S", size: CGFloat(14)),
+                (label: "M", size: CGFloat(20)),
+                (label: "L", size: CGFloat(28)),
+                (label: "XL", size: CGFloat(36)),
+            ], id: \.size) { preset in
+                Button {
+                    viewModel.annotationStyle.fontSize = preset.size
+                } label: {
+                    Text(preset.label)
+                        .font(.system(size: 11, weight: .medium))
+                        .frame(width: 28, height: 28)
+                        .background(viewModel.annotationStyle.fontSize == preset.size
+                                    ? Color.accentColor.opacity(0.2) : Color.clear)
+                        .cornerRadius(6)
+                }
+                .buttonStyle(.plain)
+                .help("Font size \(Int(preset.size))pt")
+            }
         }
     }
 

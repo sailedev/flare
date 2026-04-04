@@ -15,6 +15,7 @@ struct AnnotationCanvasView: View {
     // Text editing state
     @State private var pendingTextPosition: CGPoint?
     @State private var pendingTextContent: String = ""
+    @State private var editingAnnotationIndex: Int?
     @FocusState private var isTextFieldFocused: Bool
 
     enum AnnotationHandle {
@@ -57,12 +58,17 @@ struct AnnotationCanvasView: View {
                         }
                     }
             )
+            .onTapGesture(count: 2) { location in
+                handleDoubleTap(at: location)
+            }
             .onTapGesture { location in
                 if viewModel.activeTool == .select {
                     handleSelectTap(at: location)
                 } else if viewModel.activeTool == .text {
                     pendingTextContent = ""
                     pendingTextPosition = location
+                    editingAnnotationIndex = nil
+                    viewModel.isEditingText = true
                     isTextFieldFocused = true
                 } else if viewModel.activeTool == .callout {
                     viewModel.pushUndoState()
@@ -84,32 +90,105 @@ struct AnnotationCanvasView: View {
     // MARK: - Text Input Overlay
 
     private func textInputOverlay(at position: CGPoint) -> some View {
-        TextField("Type text...", text: $pendingTextContent)
-            .textFieldStyle(.roundedBorder)
-            .frame(width: 200)
-            .focused($isTextFieldFocused)
-            .position(x: position.x + 100, y: position.y)
-            .onSubmit {
-                commitTextAnnotation()
-            }
+        textInputPanel
+            .position(x: position.x + 130, y: position.y + 40)
             .onExitCommand {
                 pendingTextPosition = nil
                 pendingTextContent = ""
+                editingAnnotationIndex = nil
+                viewModel.isEditingText = false
             }
+    }
+
+    private var textInputPanel: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            textEditorField
+            textInputFooter
+        }
+        .padding(6)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var textEditorField: some View {
+        TextEditor(text: $pendingTextContent)
+            .font(.system(size: viewModel.annotationStyle.fontSize, weight: .semibold))
+            .frame(minHeight: 32, maxHeight: 120)
+            .frame(width: 240)
+            .fixedSize(horizontal: false, vertical: true)
+            .scrollContentBackground(.hidden)
+            .background(Color(nsColor: .controlBackgroundColor))
+            .cornerRadius(6)
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
+            )
+            .focused($isTextFieldFocused)
+    }
+
+    private var textInputFooter: some View {
+        HStack(spacing: 8) {
+            Text("Shift+Enter for newline")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            Spacer()
+            Button("Done") {
+                commitTextAnnotation()
+            }
+            .font(.caption2)
+            .buttonStyle(.borderedProminent)
+            .controlSize(.mini)
+            .keyboardShortcut(.return, modifiers: [])
+        }
     }
 
     private func commitTextAnnotation() {
         guard let pos = pendingTextPosition else { return }
         let content = pendingTextContent.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !content.isEmpty else {
+            // If editing and user clears content, delete the annotation
+            if let editIdx = editingAnnotationIndex,
+               viewModel.annotations.indices.contains(editIdx) {
+                viewModel.pushUndoState()
+                viewModel.annotations.remove(at: editIdx)
+            }
             pendingTextPosition = nil
             pendingTextContent = ""
+            editingAnnotationIndex = nil
+            viewModel.isEditingText = false
             return
         }
         viewModel.pushUndoState()
-        viewModel.annotations.append(.text(position: pos, content: content, style: viewModel.annotationStyle))
+        if let editIdx = editingAnnotationIndex,
+           viewModel.annotations.indices.contains(editIdx) {
+            // Update existing annotation in place
+            viewModel.annotations[editIdx] = .text(position: pos, content: content, style: viewModel.annotationStyle)
+        } else {
+            viewModel.annotations.append(.text(position: pos, content: content, style: viewModel.annotationStyle))
+        }
         pendingTextPosition = nil
         pendingTextContent = ""
+        editingAnnotationIndex = nil
+        viewModel.isEditingText = false
+    }
+
+    // MARK: - Double-tap to Edit Text
+
+    private func handleDoubleTap(at point: CGPoint) {
+        // Find a text annotation at this point
+        for i in viewModel.annotations.indices.reversed() {
+            let annotation = viewModel.annotations[i]
+            if case .text(let position, let content, _) = annotation,
+               annotation.boundingRect.insetBy(dx: -6, dy: -6).contains(point) {
+                // Enter edit mode for this text annotation
+                pendingTextContent = content
+                pendingTextPosition = position
+                editingAnnotationIndex = i
+                viewModel.isEditingText = true
+                viewModel.activeTool = .text
+                isTextFieldFocused = true
+                return
+            }
+        }
     }
 
     // MARK: - Selection Gestures
@@ -371,10 +450,21 @@ struct AnnotationCanvasView: View {
             context.fill(arrowPath, with: .color(Color(nsColor: style.color)))
 
         case .text(let position, let content, let style):
-            context.draw(
-                Text(content).font(.system(size: style.fontSize, weight: .semibold)).foregroundColor(Color(nsColor: style.color)),
-                at: position, anchor: .topLeading
-            )
+            let textView = Text(content)
+                .font(.system(size: style.fontSize, weight: .semibold))
+                .foregroundColor(Color(nsColor: style.color))
+            if style.filled {
+                let resolved = context.resolve(textView)
+                let proposalSize = CGSize(width: 400, height: CGFloat.greatestFiniteMagnitude)
+                let textSize = resolved.measure(in: proposalSize)
+                let bgRect = CGRect(
+                    x: position.x - 4, y: position.y - 2,
+                    width: textSize.width + 8, height: textSize.height + 4
+                )
+                context.fill(Path(roundedRect: bgRect, cornerRadius: 4),
+                             with: .color(Color.black.opacity(0.6)))
+            }
+            context.draw(textView, at: position, anchor: .topLeading)
 
         case .rectangle(let rect, let style):
             if style.filled {
@@ -393,23 +483,31 @@ struct AnnotationCanvasView: View {
             context.fill(Path(rect), with: .color(Color(nsColor: color).opacity(opacity)))
 
         case .blur(let rect):
-            context.fill(Path(rect), with: .color(.gray))
-            let blockSize: CGFloat = 8
-            var bx = rect.origin.x
-            while bx < rect.maxX {
-                var by = rect.origin.y
-                while by < rect.maxY {
-                    let seed = Int((bx - rect.origin.x) / blockSize) &* 31 &+ Int((by - rect.origin.y) / blockSize) &* 17
-                    let brightness = 0.3 + Double(abs(seed) % 40) / 100.0
-                    let blockRect = CGRect(
-                        x: bx, y: by,
-                        width: min(blockSize, rect.maxX - bx),
-                        height: min(blockSize, rect.maxY - by)
-                    )
-                    context.fill(Path(blockRect), with: .color(Color(white: brightness)))
-                    by += blockSize
+            // Try to pixelate the actual underlying content
+            if let pixelatedImage = viewModel.pixelatedRegion(for: rect) {
+                let image = Image(nsImage: pixelatedImage)
+                let resolved = context.resolve(image)
+                context.draw(resolved, in: rect)
+            } else {
+                // Fallback: gray mosaic when source is unavailable
+                context.fill(Path(rect), with: .color(.gray))
+                let blockSize: CGFloat = 12
+                var bx = rect.origin.x
+                while bx < rect.maxX {
+                    var by = rect.origin.y
+                    while by < rect.maxY {
+                        let seed = Int((bx - rect.origin.x) / blockSize) &* 31 &+ Int((by - rect.origin.y) / blockSize) &* 17
+                        let brightness = 0.3 + Double(abs(seed) % 40) / 100.0
+                        let blockRect = CGRect(
+                            x: bx, y: by,
+                            width: min(blockSize, rect.maxX - bx),
+                            height: min(blockSize, rect.maxY - by)
+                        )
+                        context.fill(Path(blockRect), with: .color(Color(white: brightness)))
+                        by += blockSize
+                    }
+                    bx += blockSize
                 }
-                bx += blockSize
             }
 
         case .callout(let position, let number, let style):
