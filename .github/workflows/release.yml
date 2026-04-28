@@ -122,3 +122,10 @@ jobs:
             "Flare-$VERSION.dmg" \
             --title "Flare $VERSION" \
             --generate-notes
+
+      - name: Update Homebrew cask
+        uses: Homebrew/actions/bump-packages@main
+        with:
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          casks: sailedev/flare/flare
+          fork: false
