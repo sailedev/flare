@@ -218,6 +218,8 @@ final class AppCoordinator: ObservableObject {
             let beautified = BeautificationEngine.render(screenshot: viewModel.originalScreenshot, settings: viewModel.settings)
             self.outputEngine.saveToDefaultFolder(beautified, format: self.settingsStore.defaultFormat, quality: self.settingsStore.jpgQuality, appName: appName, captureMode: captureMode)
             self.historyStore.save(image: beautified, captureMode: captureMode ?? "capture", appName: appName ?? "")
+            self.outputEngine.showCaptureNotification(action: .saveToFile)
+            self.closePostCapturePreview()
         }
 
         viewModel.onEdit = { [weak self, weak viewModel] in
